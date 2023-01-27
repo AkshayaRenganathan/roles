@@ -1,0 +1,216 @@
+package com.infy.service;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.infy.dto.DishDTO;
+import com.infy.dto.OrderItemsDTO;
+import com.infy.dto.OrdersDTO;
+import com.infy.dto.RestaurantDTO;
+import com.infy.dto.RestaurantTransactionDTO;
+import com.infy.dto.Role;
+import com.infy.dto.RolesDTO;
+
+import org.springframework.beans.factory.annotation.Autowired;
+
+import com.infy.dto.UserAddressDTO;
+import com.infy.dto.UserLikesDTO;
+import com.infy.dto.UsersDTO;
+
+import com.infy.entity.UserAddress;
+import com.infy.entity.Users;
+
+import com.infy.dto.WalletDTO;
+import com.infy.entity.Dish;
+import com.infy.entity.OrderItems;
+import com.infy.entity.Orders;
+import com.infy.entity.Restaurant;
+import com.infy.entity.RestaurantTransaction;
+import com.infy.entity.Roles;
+import com.infy.entity.UserAddress;
+import com.infy.entity.UserLikes;
+import com.infy.entity.Users;
+import com.infy.entity.Wallet;
+
+import com.infy.exception.FoodAddaException;
+import com.infy.repository.UserAddressRepository;
+import com.infy.repository.UsersRepository;
+
+@Service(value = "userService")
+@Transactional
+
+public class UserServiceImpl implements UserService {
+
+	@Autowired
+	private UsersRepository userRepository;
+
+	@Autowired
+	private UserAddressRepository userAddressRepository;
+
+	@Override
+	public UsersDTO authenticateUser(String contactNumber, String password) throws Exception {
+
+		// Your code goes here
+		System.out.println(contactNumber);
+		System.out.println(password);
+
+		Optional<Users> user = userRepository.findByContactNumber(contactNumber);
+
+		Users u = user.orElseThrow(() -> new FoodAddaException("UserService.INVALID_CREDENTIALS"));
+		if (!u.getPassword().equals(password))
+			throw new FoodAddaException("UserService.INVALID_CREDENTIALS");
+
+		UsersDTO newuser = new UsersDTO();
+
+		newuser.setContactNumber(u.getContactNumber());
+		newuser.setEmailId(u.getEmailId());
+		newuser.setUserId(u.getUserId());
+		newuser.setUserName(u.getUserName());
+		
+		List<Roles> roles = u.getRoles();
+		List<RolesDTO> rolesdto = new ArrayList<>();
+		
+		for(Roles r:roles) {
+			RolesDTO rd = new RolesDTO();
+			rd.setRoleId(r.getRoleId());
+			rd.setRoleType(r.getRoleType());
+			rolesdto.add(rd);
+		}
+		newuser.setRoles(rolesdto);
+
+		List<UserAddressDTO> list = new ArrayList<>();
+		for (UserAddress l : u.getAddressList()) {
+			UserAddressDTO add = new UserAddressDTO();
+			add.setAddressLine1(l.getAddressLine1());
+			add.setAddressLine2(l.getAddressLine2());
+			add.setArea(l.getArea());
+			add.setCity(l.getCity());
+			add.setPincode(l.getPincode());
+			add.setUserAddressName(l.getUserAddressName());
+			add.setUserAddressId(l.getUserAddressId());
+			add.setUserState(l.getUserState());
+			list.add(add);
+		}
+
+		newuser.setAddressList(list);
+	
+		return newuser;
+
+	}
+
+	@Override
+	public String registerNewUser(UsersDTO user) throws Exception {
+
+		// Your code goes here
+		Optional<Users> optional = userRepository.findByContactNumber(user.getContactNumber());
+
+		if (optional.isPresent())
+			throw new FoodAddaException("UserService.USER_ALREADY_EXISTS");
+
+		if (user.getRoles().get(0).getRoleType() == Role.CUSTOMER
+				|| (user.getRoles().get(0).getRoleType() == Role.VENDOR)) {
+			Users userEntity = new Users();
+
+			 if(user.getRoles().get(0).getRoleType().ordinal()==1){
+
+			List<UserAddress> addrs = new ArrayList<>();
+			user.getAddressList().forEach(u -> {
+				UserAddress u1 = new UserAddress();
+				
+				u1.setAddressLine1(u.getAddressLine1());
+				u1.setAddressLine2(u.getAddressLine2());
+				u1.setArea(u.getArea());
+				u1.setCity(u.getCity());
+				u1.setPincode(u.getPincode());
+				u1.setUserAddressId(u.getUserAddressId());
+				u1.setUserAddressName(u.getUserAddressName());
+				u1.setUserState(u.getUserState());
+				
+				addrs.add(u1);
+			});
+			userEntity.setAddressList(addrs);
+
+			 }
+
+			userEntity.setContactNumber(user.getContactNumber());
+			userEntity.setEmailId(user.getEmailId());
+			userEntity.setPassword(user.getPassword());
+			userEntity.setUserId(user.getUserId());
+			userEntity.setUserName(user.getUserName());
+			
+			Roles r=new Roles();
+			r.setRoleType(user.getRoles().get(0).getRoleType());
+			List<Roles> roles=new ArrayList<Roles>();
+			roles.add(r);
+			userEntity.setRoles(roles);			
+
+			userRepository.save(userEntity);
+		}
+		else {
+			throw new FoodAddaException("UserValidator.INVALID_ROLE_TYPE");
+		}
+		return "UserAPI.REGISTER_USER_SUCCESS2";
+	}
+
+	@Override
+	public Integer addNewAddress(UserAddressDTO address, Integer userId) throws Exception {
+
+		// Your code goes here
+		Optional<Users> opt = userRepository.findById(userId);
+		Users user = opt.orElseThrow(() -> new FoodAddaException("UserService.USER_NOT_FOUND"));
+
+		UserAddress us = new UserAddress();
+		us.setAddressLine1(address.getAddressLine1());
+		us.setAddressLine2(address.getAddressLine2());
+		us.setArea(address.getArea());
+		us.setCity(address.getCity());
+		us.setPincode(address.getPincode());
+		us.setUserAddressName(address.getUserAddressName());
+		us.setUserState(address.getUserState());
+		us.setUserAddressId(userId);
+		userAddressRepository.save(us);
+
+		return us.getUserAddressId();
+	}
+
+	@Override
+	public String updateAddress(UserAddressDTO address, Integer userId) throws Exception {
+		
+		 Optional<Users> opt=userRepository.findById(userId); Users
+		  user=opt.orElseThrow(()->new
+		  FoodAddaException("UserService.USER_NOT_FOUND"));
+		  
+		 Optional<UserAddress> ad=userAddressRepository.findById(address.getUserAddressId()); 
+		 UserAddress us=ad.orElseThrow(()->new FoodAddaException("UserService.ADDRESS_NOT_FOUND"));
+		 
+		 us.setAddressLine1(address.getAddressLine1());
+		 us.setAddressLine2(address.getAddressLine2()); us.setArea(address.getArea());
+		 us.setCity(address.getCity()); us.setPincode(address.getPincode());
+		 us.setUserAddressName(address.getUserAddressName());
+		  us.setUserState(address.getUserState()); us.setUserAddressId(address.getUserAddressId());
+		
+		//Your code goes here
+		 
+		return "UserService.UPDATE_ADDRESS";
+	}
+
+	@Override
+	public void deleteAddress(Integer addressId, Integer userId) throws Exception {
+
+		// Your code goes here
+		Optional<Users> opt = userRepository.findById(userId);
+		Users us = opt.orElseThrow(() -> new FoodAddaException("UserService.USER_NOT_FOUND"));
+
+		Optional<UserAddress> ad = userAddressRepository.findById(addressId);
+		UserAddress userAddr = ad.orElseThrow(() -> new FoodAddaException("UserService.ADDRESS_NOT_FOUND"));
+		
+		
+		userAddressRepository.deleteById(addressId);
+
+	}
+}
